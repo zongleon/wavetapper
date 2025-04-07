@@ -1,4 +1,5 @@
 import OSC from "osc-js";
+import * as readline from "node:readline";
 
 const port = process.env.PORT || 8910;
 
@@ -18,8 +19,32 @@ osc.on('open', () => {
     }
 });
 
-osc.on('/players', message => {
-    console.log(message);
-}) 
-
 osc.open();
+
+// Start a REPL loop for custom OSC messages
+const rl = readline.createInterface({
+input: process.stdin,
+output: process.stdout,
+prompt: 'OSC> '
+});
+
+rl.prompt();
+
+rl.on('line', (line) => {
+    const parts = line.trim().split(' ');
+    const address = parts[0];
+    const args = parts.slice(1);
+
+    if (!address.startsWith('/')) {
+        console.log('Invalid address. OSC addresses must start with "/".');
+    } else {
+        const message = new OSC.Message(address, ...args);
+        osc.send(message);
+        console.log(`Sent OSC message to ${address} with arguments: ${args}`);
+    }
+
+    rl.prompt();
+}).on('close', () => {
+    console.log('Exiting REPL.');
+    process.exit(0);
+});

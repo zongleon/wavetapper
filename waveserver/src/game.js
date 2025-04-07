@@ -19,12 +19,12 @@ class Game {
         let args = message.args;
         if (args.length == 2) {
             const playerId = args[0];
-            const playerPos = args[1]; 
+            const playerPos = args[1];
 
             if (this.players.has(playerId)) {
                 console.log(`Player ID already exists: ${playerId}`);
             } else {
-                this.players.set(playerId, { id: playerId, pos: playerPos });
+                this.players.set(playerId, { id: playerId, pos: playerPos, setting: 0 });
                 this.connections.set(playerId, ws);
 
                 // broadcast connections
@@ -43,7 +43,7 @@ class Game {
      */
     handleLeave(message) {
         let args = message.args;
-        if (args.length > 0) {
+        if (args.length == 1) {
             const playerId = args[0];
 
             if (this.players.has(playerId)) {
@@ -72,12 +72,29 @@ class Game {
             }
         }
     }
+
+    /**
+     * Handle setting update.
+     * @param {OSC.Message} message - The arguments of the OSC message.
+     */
+    handleUpdate(message) {
+        let args = message.args;
+        if (args.length == 2) {
+            const playerId = args[0];
+            const setting = args[1];
+
+            let cur = this.players.get(playerId);
+            cur.setting = Number(setting);
+            this.players.set(playerId, cur);
+        }
+    }
     
     /**
      * Send updated player map to all clients
      */
     broadcastPlayers() {
         const playerMap = JSON.stringify([...this.players.values()]);
+        console.log("broadcasting players");
         this.osc.send(new OSC.Message('/players', playerMap));
     }
 }

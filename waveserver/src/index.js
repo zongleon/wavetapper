@@ -28,24 +28,42 @@ app.get('/health', (req, res) => {
 
 // handle unique join and dropped connections
 osc.on('open', () => {
+  setInterval(() => {
+    console.log(game.players, Array.from(game.connections.keys()));
+  }, 5000);
+
   // handle raw connection events
   plugin.socket.on('connection', (ws) => {
     // handle join event
+    console.log("ws connection open");
     // (store the connection so we can know which player is associated with it)
     const joinId = osc.on('/join', message => {
       game.handleJoin(message, ws);
       osc.off('/join', joinId);
     });
 
+    const viewId = osc.on('/viewing', message => {
+      game.broadcastPlayers();
+      osc.off('/join', joinId);
+      osc.off('/viewing', viewId);
+    });
+
     ws.on('close', () => {
+      console.log("ws connection close");
       game.handleDrop(ws);
+      osc.off('/join', joinId);
+      osc.off('/viewing', viewId);
     });
   });
 });
 
-// handle normal events
+// // handle normal events
 osc.on('/leave', message => {
   game.handleLeave(message);
+});
+
+osc.on('/setting', message => {
+  game.handleUpdate(message);
 });
 
 osc.open();
