@@ -26,44 +26,50 @@ app.get('/health', (req, res) => {
   });
 });
 
-// handle unique join and dropped connections
-osc.on('open', () => {
-  setInterval(() => {
-    console.log(game.players, Array.from(game.connections.keys()));
-  }, 5000);
-
-  // handle raw connection events
-  plugin.socket.on('connection', (ws) => {
-    // handle join event
-    console.log("ws connection open");
-    // (store the connection so we can know which player is associated with it)
-    const joinId = osc.on('/join', message => {
-      game.handleJoin(message, ws);
-      osc.off('/join', joinId);
-    });
-
-    const viewId = osc.on('/viewing', message => {
-      game.broadcastPlayers();
-      osc.off('/join', joinId);
-      osc.off('/viewing', viewId);
-    });
-
-    ws.on('close', () => {
-      console.log("ws connection close");
-      game.handleDrop(ws);
-      osc.off('/join', joinId);
-      osc.off('/viewing', viewId);
-    });
-  });
+// handle different player joins
+osc.on('/join', message => {
+  game.handleJoin(message);
 });
 
-// // handle normal events
-osc.on('/leave', message => {
+osc.on('/viewing', _ => {
+  game.broadcast("players");
+});
+
+osc.on('/conduct', message => {
+  game.conductorJoin(message, ws);
+});
+
+// handle normal events
+osc.on('/player/leave', message => {
   game.handleLeave(message);
 });
 
-osc.on('/setting', message => {
+osc.on('/player/setting', message => {
   game.handleUpdate(message);
 });
 
+osc.on('/conductor/start', message => {
+  game.broadcast("start");
+});
+
+// Heartbeat: listen for pong
+osc.on("/pong/*", (message) => {
+  // message.address is like /pong/3, extract pos
+  const player = parseInt(message.address.split("/")[2]);
+  game.handlePong(player);
+});
+
+// Heartbeat: send pings every 5 seconds
+setInterval(() => {
+  game.sendPings();
+
+  setTimeout(() => {
+    game.checkTimeouts();
+  }, 2000);
+}, 5000);
+
 osc.open();
+
+setInterval(() => {
+  console.log(game.players);
+}, 5000);
