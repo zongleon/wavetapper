@@ -22,9 +22,10 @@ await app.init({ background: "#dadada", resizeTo: window });
 // Append the application canvas to the document body
 document.getElementById("pixi-container")!.appendChild(app.canvas);
 const textures: Texture[] = [];
-const baseTexture = await Assets.load("/assets/t.jpg");
-textures[0] = await Assets.load("/assets/green.jpg");
-textures[1] = await Assets.load("/assets/blue.jpg");
+const baseTexture = await Assets.load("/assets/0.jpg");
+for (let i = 0; i < 16; i++) {
+  textures[i] = await Assets.load(`/assets/${i+1}.jpg`);
+}
 
 // make a grid of 16 cubes
 let cubes: Container[] = [];
@@ -39,9 +40,9 @@ for (let i = 0; i < 4; i++) {
     const cube = createCube(
       (app.canvas.width - 3.5 * spacing_x) / 2 + i * spacing_x,
       (app.canvas.height - 3.5 * spacing_y) / 2 + j * spacing_y,
-      baseTexture
+      cubeSize / 105,
+      textures[i * 4 + j],
     );
-    cube.scale.set(cubeSize / 105);
     cubes.push(cube);
     baseHeights.push(cube.y);
     app.stage.addChild(cube);
@@ -96,7 +97,14 @@ function updateCubes(players: Player[]) {
       let active = players.find((value: Player) => {
         return value.pos == i;
       }) !== undefined;
-      (cubes[i].children[1] as Sprite).texture = active ? textures[i] : baseTexture;
+      // if active, delete the old cube and create a new one with textures[i]
+      if (active) {
+        const cube = createCube(cubes[i].x, cubes[i].y, cubes[i].scale.x, textures[i]);
+        app.stage.removeChild(cubes[i]);
+        cubes[i] = cube;
+        app.stage.addChild(cube);
+      }
+      // (cubes[i].children[1] as Sprite).texture = active ? textures[i] : baseTexture;
     }
   });
 }
@@ -121,6 +129,7 @@ function updateChuck(players: Player[]) {
 function createCube(
   x: number,
   y: number,
+  scale: number,
   texture: Texture,
   tint: number = 0xffffff
 ) {
@@ -133,18 +142,18 @@ function createCube(
   left.skew.set(HORIZ_SKEW, 0);
   left.rotation = VERT_ROTATE;
   left.anchor.set(0.5);
-  left.x = -28;
+  left.x = -27;
   left.y = 48;
   left.tint = 0xaaaaaa;
 
-  // Create left face
-  const top = new Sprite(texture);
+  // Create top face
+  const top = new Sprite(baseTexture);
   top.skew.set(HORIZ_SKEW, 0);
   top.rotation = -VERT_ROTATE;
   top.anchor.set(0.5);
   top.x = 0;
   top.y = 0.5;
-  top.tint = 0xffffff;
+  top.tint = 0xcccccc;
 
   // // Create right face
   const right = new Sprite(texture);
@@ -153,7 +162,7 @@ function createCube(
   right.anchor.set(0.5);
   right.x = 28;
   right.y = 48;
-  right.tint = 0xcccccc;
+  right.tint = 0xffffff;
 
   container.tint = tint;
   container.blendMode = "normal";
@@ -167,6 +176,8 @@ function createCube(
   });
 
   container.addChild(left, right, top);
+
+  container.scale.set(scale);
   return container;
 }
 
