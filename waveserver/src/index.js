@@ -22,7 +22,8 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     clients: plugin.socket.clients.size,
-    time: new Date().toISOString()
+    time: new Date().toISOString(),
+    hasConductor: game.conductor != null,
   });
 });
 
@@ -36,7 +37,7 @@ osc.on('/viewing', _ => {
 });
 
 osc.on('/conduct', message => {
-  game.conductorJoin(message, ws);
+  game.conductorJoin();
 });
 
 // handle normal events
@@ -46,10 +47,26 @@ osc.on('/player/leave', message => {
 
 osc.on('/player/setting', message => {
   game.handleUpdate(message);
+  osc.send(new OSC.Message("/setting", message.args[0], message.args[1]));
 });
 
-osc.on('/conductor/start', message => {
-  game.broadcast("start");
+osc.on('/player/volume', message => {
+  osc.send(new OSC.Message("/volume", message.args[0], message.args[1]));
+});
+
+osc.on('/player/pan', message => {
+  osc.send(new OSC.Message("/pan", message.args[0], message.args[1]));
+});
+
+osc.on('/player/tap', message => {
+  osc.send(new OSC.Message("/tap", message.args[0]));
+});
+
+osc.on('/conductor/section', message => {
+  if (message.args[0] == game.conductor) {
+    console.log(message.args[1]);
+    osc.send(new OSC.Message("/enabled", message.args[1]));
+  }
 });
 
 // Heartbeat: listen for pong
@@ -65,11 +82,11 @@ setInterval(() => {
 
   setTimeout(() => {
     game.checkTimeouts();
-  }, 2000);
+  }, 1000);
 }, 5000);
 
 osc.open();
 
-setInterval(() => {
-  console.log(game.players);
-}, 5000);
+// setInterval(() => {
+//   console.log(game.players);
+// }, 5000);

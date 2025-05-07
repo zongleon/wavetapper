@@ -3,78 +3,142 @@
  0, 0, 0, 0, 0, 0, 0, 0] @=> global int enabled_sounds[];
 [0, 0, 0, 0, 0, 0, 0, 0,
  0, 0, 0, 0, 0, 0, 0, 0] @=> global int setting_sounds[];
+[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] @=> global float gains_sounds[];
+[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] @=> global float pans_sounds[];
+ 
+ 0 => global float rev14;
 
 // sound play event (for animation, etc)
 [0, 0, 0, 0, 0, 0, 0, 0,
  0, 0, 0, 0, 0, 0, 0, 0] @=> global int poss[];
+
 global Event soundEvent;
 global Event loopEvent;
 
 // Define the sound sources
-SinOsc oscs[16];
-ADSR envs[16];
+[
+    "tracks/track 1-1 kick.wav",
+    "tracks/track 2-1 snare.wav",
+    "tracks/track 3-1 hat.wav",
+    "tracks/track 4-1 clhat.wav",
+    "tracks/track 5-1 pad.wav",
+    "tracks/track 7-1 vox2.wav",
+    "tracks/track 8-1 vox3.wav",
+    "tracks/track 9-1 vox4.wav",
+    "tracks/track 10-1 vox5.wav",
+    "tracks/track 11-1 arp.wav",
+    "tracks/track 12-1 arpnoise.wav",
+    "tracks/track 13-1 dialup.wav",
+    "tracks/track 14-1 bass.wav",
+    "tracks/track 16 blank.wav", // track 14, reverb guy
+    "tracks/track 15-1 vo6.wav",
+    "tracks/track 16 blank.wav"
+] @=> string files[];
+
+SndBuf sounds[16];
+Gain gains[16];
+Pan2 pans[16];
+JCRev rev;
+
+rev => dac;
+
+0.5 => float baseGain;
 
 for (0 => int i; i < 16; i++) {
-    SinOsc osc => ADSR env => dac;
-    env.set(50::ms, 50::ms, 0.2, 50::ms);
-    440 + i * 20 => osc.freq;
-    0.2 => osc.gain;
-    osc @=> oscs[i];
-    env @=> envs[i];
+    SndBuf sound => Gain gain => Pan2 pan => rev;
+
+    me.dir() + files[i] => sound.read;
+    sound.samples() => sound.pos;
+    sound @=> sounds[i];
+    rev14 => rev.mix;
+    gain @=> gains[i];
+    pan @=> pans[i];
 }
 
 // rhythm
-140 => int bpm;
-(1.0 / bpm)::minute => dur beat;
-[1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1] @=> int pattern1[];
-[0, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0] @=> int pattern2[];
+sounds[0].length() => dur patternLength;
+// patternLength / 32 - 24::ms => dur triggerTime;
+patternLength / 128 => dur triggerTime;
 
-// for testing
-int patterns[16][16];
+// transient detection
+0.005 => float threshold;
+fun void transientDetector(SndBuf buf, int i)
+{
+    float currentSamp, lastSamp, difference;
+    buf.last() => currentSamp;
+    Math.fabs(currentSamp - lastSamp) => difference; // simpler since only one check per tick
 
-for (0 => int i; i < patterns.size(); i++) {
-    randomPattern() @=> patterns[i];
+    // <<< difference >>>;
+    if (difference > threshold)
+    {
+        1 => poss[i];
+        soundEvent.broadcast();
+    }
+    lastSamp => currentSamp;
 }
 
-// [osc1, osc2] @=> Osc oscs[];
-// [env1, env2] @=> ADSR envs[];
-// [pattern1, pattern2] @=> int patterns[][];
 
-// Function to play rhythm 1
-fun void rhythm(ADSR env, int pattern[], int p) {
-    // <<< "Playing rhythm", pattern >>>;
-    for (int i : pattern) {
-        // Play rhythm 1
-        if (i == 1) {
-            1 => env.keyOn;
-            1 => poss[p];
-            soundEvent.signal();
-        } else {
-            1 => env.keyOff;
-            0 => poss[p];
-        }
-        beat / 2 => now;
+// Function to play a pattern
+fun void rhythm(int p) {
+    0 => sounds[p].pos;
+    now => time start;
+    while (now < start + patternLength) {
+        // detect transient
+        transientDetector(sounds[p], p);
+        triggerTime => now;
+        0 => poss[p];
     }
-    1 => env.keyOff;
     0 => poss[p];
 }
 
-// Generate a random pattern
-fun int[] randomPattern() {
-    int pattern[16];
-    for (0 => int i; i < pattern.size(); i++) {
-        Math.random2(0, 1) => pattern[i];
+fun void effecter(int p) {
+    while (true) {
+        // update gain
+        gains_sounds[p] + baseGain => gains[p].gain;
+        pans_sounds[p] => pans[p].pan;
+        patternLength => now;
     }
-    return pattern;
+}
+
+// Function to play a pattern
+fun void reverber() {
+    now => time start;
+    while (now < start + patternLength) {
+        rev14 => rev.mix;
+        1 => poss[14];
+        soundEvent.broadcast();
+        triggerTime => now;
+    }
+    0 => poss[14];
+    0 => rev.mix;
+}
+
+fun void eventer() {
+    while (true) {
+        soundEvent => now;
+        <<< poss[0], poss[1], poss[2], poss[3], poss[4], poss[5], poss[6], poss[7],
+            poss[8], poss[9], poss[10], poss[11], poss[12], poss[13], poss[14], poss[15] >>>;
+    }
+}
+//spork ~ eventer();
+
+for (0 => int i; i < 16; i++) {
+    spork ~ effecter(i);
 }
 
 while (true) {
-    for (0 => int i; i < patterns.size(); i++) {
+    for (0 => int i; i < enabled_sounds.size(); i++) {
         if (enabled_sounds[i] == 1) {
-            spork ~ rhythm(envs[i], patterns[i], i);
+            if (i == 13) {
+                spork ~ reverber();
+                continue;
+            }
+            spork ~ rhythm(i);
         }
     }
     // me.yield();
     loopEvent.signal();
-    8 * beat => now;
+    patternLength => now;
 }

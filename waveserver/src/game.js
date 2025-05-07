@@ -1,5 +1,7 @@
 import OSC from "osc-js";
 
+let MOCK_DATA = false;
+
 class Game {
     /**
      * Initialize game object.
@@ -8,6 +10,12 @@ class Game {
     constructor(osc) {
         this.osc = osc;
         this.players = new Map();
+        if (MOCK_DATA) {
+            for (let i = 0; i < 16; i++) {
+                this.players.set(i, { id: i, pos: i, setting: 0, pingTime: 0, pongTime: 0});
+            }
+        }
+        this.enabled = new Array(16).fill(0);
         this.conductor = null;
     }
 
@@ -21,15 +29,15 @@ class Game {
             const playerId = args[0];
             const playerPos = args[1];
 
-            if (this.players.has(playerId)) {
-                console.log(`Player ID already exists: ${playerId}`);
+            if (this.players.has(playerPos)) {
+                console.log(`Player ID already exists: ${playerPos}`);
             } else {
-                this.players.set(playerId, { id: playerId, pos: playerPos, setting: 0, pingTime: 0, pongTime: 0});
+                this.players.set(playerPos, { id: playerId, pos: playerPos, setting: 0, pingTime: 0, pongTime: 0});
                 
                 // broadcast connections
                 this.broadcast("players");
 
-                console.log(`Player joined: ${playerId}`);
+                console.log(`Player joined: ${playerPos}`);
             }
         } else {
             console.log('Invalid join message: Missing player ID (s) or pos (i).');
@@ -43,18 +51,18 @@ class Game {
     handleLeave(message) {
         let args = message.args;
         if (args.length == 1) {
-            const playerId = args[0];
+            const playerPos = args[0];
 
             // delete player from list
-            if (this.players.has(playerId)) {
-                this.players.delete(playerId);
+            if (this.players.has(playerPos)) {
+                this.players.delete(playerPos);
                 
                 // broadcast
                 this.broadcast("players");
 
-                console.log(`Player left: ${playerId}`);
+                console.log(`Player left: ${playerPos}`);
             } else {
-                console.log(`Player ${playerId} has already left.`);
+                console.log(`Player ${[playerPos]} has already left.`);
             }
         } else {
             console.log('Invalid leave message: Missing player ID.');
@@ -64,21 +72,17 @@ class Game {
     /**
      * Handle a conductor joining the game.
      * there can only be one.
-     * @param {OSC.Message} message - arguments
-     * @param {WebSocket} ws - the connection
      */
-    conductorJoin(message, ws) {
-        this.conductor = ws;
-        this.connections.set('conductor', ws);
+    conductorJoin() {
+        if (this.conductor != null) {
+            console.log("Conductor already exists.");
+            return;
+        }
+        this.conductor = Math.round(Math.random() * -10000);
+        this.players.set(this.conductor, { id: this.conductor, pos: this.conductor, setting: 0, pingTime: 0, pongTime: 0});
+        this.osc.send(new OSC.Message('/conductor/id', this.conductor));
     }
 
-    /**
-     * Handl e conductor leaving the game.
-     */
-    conductorLeave() {
-        this.conductor = null;
-        this.connections.delete('conductor');
-    }
 
     /**
      * Handle setting update.
@@ -87,12 +91,12 @@ class Game {
     handleUpdate(message) {
         let args = message.args;
         if (args.length == 2) {
-            const playerId = args[0];
+            const playerPos = args[0];
             const setting = args[1];
 
-            let cur = this.players.get(playerId);
+            let cur = this.players.get(playerPos);
             cur.setting = Number(setting);
-            this.players.set(playerId, cur);
+            this.players.set(playerPos, cur);
         }
     }
 
@@ -101,10 +105,10 @@ class Game {
      * @param {number} playerPos
      */
     handlePong(playerPos) {
-        for (const [id, player] of this.players.entries()) {
-            if (playerPos === player.pos) {
+        for (const [pos, player] of this.players.entries()) {
+            if (playerPos === pos) {
                 player.pongTime = Date.now();
-                this.players.set(id, player);
+                this.players.set(pos, player);
                 break;
             }
         }
@@ -115,10 +119,10 @@ class Game {
      */
     sendPings() {
         const now = Date.now();
-        for (const [playerId, player] of this.players.entries()) {
+        for (const [pos, player] of this.players.entries()) {
             this.osc.send(new OSC.Message(`/ping/${player.pos}`, 1));
             player.pingTime = now;
-            this.players.set(playerId, player);
+            this.players.set(pos, player);
         }
     }
 
@@ -128,14 +132,19 @@ class Game {
      * Handles players who never send a pong.
      */
     checkTimeouts() {
-        for (const [playerId, player] of this.players.entries()) {
+        for (const [playerPos, player] of this.players.entries()) {
             // If player never sent a pong or pongTime < pingTime, and timeout exceeded
             if (
+                !MOCK_DATA &&
                 player.pingTime > 0 &&
-                (!player.pongTime || player.pongTime < player.pingTime)
+                player.pongTime < player.pingTime
             ) {
-                console.log(`Player ${playerId} timed out.`);
-                this.handleLeave(new OSC.Message("/player/leave", playerId));
+                if (playerPos == this.conductor) {
+                    console.log(`Conductor timed out.`);
+                    this.conductor = null;
+                }
+                console.log(`Player ${playerPos} timed out.`);
+                this.handleLeave(new OSC.Message("/player/leave", playerPos));
             }
         }
     }
@@ -148,11 +157,8 @@ class Game {
             console.log("broadcasting players");
             const playerMap = JSON.stringify([...this.players.values()]);
             this.osc.send(new OSC.Message('/players', playerMap));
-        } else if (type == "start") {
-            this.osc.send(new OSC.Message('/start', 1));
         }
     }
 }
 
 export default Game;
-

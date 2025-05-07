@@ -1,18 +1,14 @@
 import { Application, Texture, Container, Sprite, Assets } from "pixi.js";
-import gsap from "gsap";
 import OSC from "osc-js";
-
-const port = 8910;
-
-// const HEIGHT_SCALE = Math.cos(Math.PI / 6);
-const HORIZ_SKEW = Math.PI / 6;
-const VERT_ROTATE = Math.PI / 6;
+import { createCube, animateJump, createTileTextures, setCubeTextures } from "../src/utils";
+import * as CONSTS from "../src/consts";
 
 type Player = {
   id: string;
   pos: number;
   setting: number;
 };
+
 
 /*
   1. show modal to let a player pick a name
@@ -49,34 +45,92 @@ nameButton.addEventListener("click", () => {
 const app = new Application();
 await app.init({ background: "#dadada", resizeTo: window });
 
+const cubeSize = Math.min(app.canvas.width, app.canvas.height) / 6;
+const spacing_x = cubeSize * 1.3;
+const spacing_y = cubeSize * 1.4;
+const scale = cubeSize / 105;
+
 // Append the application canvas to the document body
 document.getElementById("pixi-container")!.appendChild(app.canvas);
-const textures: Texture[] = [];
 const baseTexture = await Assets.load("/assets/0.jpg");
-for (let i = 0; i < 16; i++) {
-  textures[i] = await Assets.load(`/assets/${i+1}.jpg`);
-}
+const tileset: Texture = await Assets.load("/assets/tilesetwhite.png");
+tileset.source.scaleMode = "nearest";
 
 // make a grid of 16 cubes
 let cubes: Container[] = [];
 let baseHeights: number[] = [];
+let myDesignIndex: number = 0;
 
 let me: number | null = null;
+
+// --- Arrow UI elements ---
+let leftArrow: HTMLButtonElement | null = null;
+let rightArrow: HTMLButtonElement | null = null;
+
+function createArrowButtons() {
+  // Remove if already present
+  if (leftArrow) leftArrow.remove();
+  if (rightArrow) rightArrow.remove();
+
+  leftArrow = document.createElement("button");
+  rightArrow = document.createElement("button");
+  leftArrow.innerText = "←";
+  rightArrow.innerText = "→";
+  leftArrow.className = "design-arrow left-arrow";
+  rightArrow.className = "design-arrow right-arrow";
+
+  document.body.appendChild(leftArrow);
+  document.body.appendChild(rightArrow);
+
+  leftArrow.onclick = () => switchDesign(-1);
+  rightArrow.onclick = () => switchDesign(1);
+}
+
+function removeArrowButtons() {
+  if (leftArrow) leftArrow.remove();
+  if (rightArrow) rightArrow.remove();
+  leftArrow = null;
+  rightArrow = null;
+}
+
+function switchDesign(dir: number) {
+  if (me === null) return;
+  const designs = CONSTS.DESIGNS[me];
+  myDesignIndex = (myDesignIndex + dir + designs.length) % designs.length;
+  osc.send(new OSC.Message("/player/setting", me, myDesignIndex));
+  updateMyCubeDesign();
+}
+
+function updateMyCubeDesign() {
+  if (me === null) return;
+  // Update textures for the current design index
+  const leftTexts = createTileTextures(app, tileset, CONSTS.DESIGNS[me][myDesignIndex][0], me);
+  const rightTexts = createTileTextures(app, tileset, CONSTS.DESIGNS[me][myDesignIndex][1], me);
+
+  // Update the cube's textures visually
+  const cube = cubes[me];
+  // Set left, right, top textures
+  if (cube.children.length >= 3) {
+    setCubeTextures(cube, [leftTexts.composite, rightTexts.composite, leftTexts.solid]);
+  }
+}
 
 // add cubes!
 for (let i = 0; i < 4; i++) {
   for (let j = 0; j < 4; j++) {
-    const cubeSize = Math.min(app.canvas.width, app.canvas.height) / 6;
-    const spacing_x = cubeSize * 1.3;
-    const spacing_y = cubeSize * 1.4;
+    // make textures for this cube
+    const leftTexts = createTileTextures(app, tileset, CONSTS.DESIGNS[i * 4 + j][0][0], i * 4 + j);
+
     const cube = createCube(
-      (app.canvas.width - 3.5 * spacing_x) / 2 + i * spacing_x,
-      (app.canvas.height - 3.5 * spacing_y) / 2 + j * spacing_y,
-      cubeSize / 105,
-      textures[i * 4 + j],
+      (app.canvas.width - 3.5 * spacing_x) / 2 + j * spacing_x,
+      (app.canvas.height - 3.5 * spacing_y) / 2 + i * spacing_y,
+      scale,
+      baseTexture,
+      leftTexts.bg,
     );
-    cubes.push(cube);
+    addListeners(cube);
     baseHeights.push(cube.y);
+    cubes.push(cube);
     app.stage.addChild(cube);
   }
 }
@@ -86,7 +140,7 @@ const osc = initConnection();
 
 function initConnection(): OSC {
   // open ws connection
-  const plugin = new OSC.WebsocketClientPlugin({ port: port });
+  const plugin = new OSC.WebsocketClientPlugin({ port: CONSTS.PORT });
   const osc = new OSC({ discardLateMessages: true, plugin: plugin });
 
   osc.on("open", () => {
@@ -114,6 +168,7 @@ function initConnection(): OSC {
 function joinAsPlayer(index: number) {
   console.log("joining!");
   me = index;
+  
   // send the index of the cube to the server
   osc.send(new OSC.Message("/join", playerName, index));
 
@@ -135,6 +190,11 @@ function joinAsPlayer(index: number) {
   cube.scale.set(Math.max(app.canvas.width, app.canvas.height) / 105 / 3);
   baseHeights[index] = cube.y;
 
+  // Set the cube's textures for the current design index
+  updateMyCubeDesign();
+  // Show arrow buttons for design switching
+  createArrowButtons();
+
   // hide the header
   header.style.display = "none";
 }
@@ -144,106 +204,43 @@ function updateCubes(players: Player[]) {
     let active = players.find((value: Player) => {
       return value.pos == i;
     }) !== undefined;
-    cubes[i].tint = active ? 0xaaaaaa : 0xffffff;
     if (active) {
-      (cubes[i].children[1] as Sprite).texture = active ? textures[i] : baseTexture;
       cubes[i].off("pointerdown");
       cubes[i].off("pointerenter");
       cubes[i].off("pointerleave");
+      cubes[i].tint = 0xaaaaaa;
+    } else {
+      addListeners(cubes[i]);
+      cubes[i].tint = 0xffffff;
     }
   }
 }
 
-
-function createCube(
-  x: number,
-  y: number,
-  scale: number,
-  texture: Texture,
-  tint: number = 0xffffff
-) {
-  const container = new Container();
-  container.x = x;
-  container.y = y;
-
-  // Create left face
-  const left = new Sprite(texture);
-  left.skew.set(HORIZ_SKEW, 0);
-  left.rotation = VERT_ROTATE;
-  left.anchor.set(0.5);
-  left.x = -27;
-  left.y = 48;
-  left.tint = 0xaaaaaa;
-
-  // Create left face
-  const top = new Sprite(baseTexture);
-  top.skew.set(HORIZ_SKEW, 0);
-  top.rotation = -VERT_ROTATE;
-  top.anchor.set(0.5);
-  top.x = 0;
-  top.y = 0.5;
-  top.tint = 0xcccccc;
-
-  // Create right face
-  const right = new Sprite(texture);
-  right.skew.set(-HORIZ_SKEW, 0);
-  right.rotation = -VERT_ROTATE;
-  right.anchor.set(0.5);
-  right.x = 28;
-  right.y = 48;
-  right.tint = 0xffffff;
-
-  container.tint = tint;
-  container.blendMode = "normal";
-
-  container.eventMode = "static";
-  container.on("pointerdown", () => {
+function addListeners(cube: Container) {
+  cube.on("pointerdown", () => {
     // join as this guy!
-    const index = cubes.indexOf(container);
+    const index = cubes.indexOf(cube);
     if (index !== -1) {
       joinAsPlayer(index);
-      container.off("pointerenter");
-      container.off("pointerleave");
-      container.off("pointerdown");
-      container.on("pointerdown", () => {
+      cube.off("pointerenter");
+      cube.off("pointerleave");
+      cube.off("pointerdown");
+      cube.on("pointerdown", () => {
         // jump
-        animateJump(container, baseHeights[index]);
+        animateJump(cube, baseHeights[index]);
+        osc.send(new OSC.Message("/player/tap", me));
       });
     }
   });
-
-  container.on("pointerenter", () => {
+  cube.on("pointerenter", () => {
     // highlight this cube
-    container.scale.set(container.scale.x * 1.2);
+    cube.scale.set(scale * 1.2);
   });
-  container.on("pointerleave", () => {
+  cube.on("pointerleave", () => {
     // unhighlight this cube
-    container.scale.set(container.scale.x / 1.2);
-  });
-
-  container.addChild(left, right, top);
-
-  container.scale.set(scale);
-
-  return container;
-}
-
-function animateJump(
-  container: Container,
-  startHeight: number,
-  jumpHeight = 20,
-  duration = 0.1
-) {
-  gsap.to(container, {
-    y: startHeight - jumpHeight,
-    duration: duration,
-    ease: "power1.out",
-    onComplete: () => {
-      gsap.to(container, {
-        y: startHeight,
-        duration: duration,
-        ease: "bounce.out",
-      });
-    },
+    cube.scale.set(scale);
   });
 }
+
+// Optionally, remove arrows on window unload
+window.addEventListener("beforeunload", removeArrowButtons);

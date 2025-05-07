@@ -76,3 +76,30 @@ body {
 #name-picker button:hover {
     background-color: #3700b3;
 }
+
+.design-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 2rem;
+    z-index: 100;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    user-select: none;
+}
+
+.left-arrow {
+    left: 24px;
+}
+
+.right-arrow {
+    right: 24px;
+}
