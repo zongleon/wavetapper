@@ -1,5 +1,7 @@
-export const SERVER_URL = "waveserver.leonzong.com";
-export const PORT = 443;
+export const SERVER_URL = import.meta.env.MODE == "development" ? "localhost" : "waveserver.leonzong.com";
+export const PORT = import.meta.env.MODE == "development" ? 8910 : 443;
+export const SSL = import.meta.env.MODE != "development";
+
 // define and export constants
 export const HORIZ_SKEW = Math.PI / 6;
 export const VERT_ROTATE = Math.PI / 6;

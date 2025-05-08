@@ -149,7 +149,7 @@ const osc = initConnection();
 
 function initConnection(): OSC {
   // open ws connection
-  const plugin = new OSC.WebsocketClientPlugin({ host: CONSTS.SERVER_URL, port: CONSTS.PORT, secure: true });
+  const plugin = new OSC.WebsocketClientPlugin({ host: CONSTS.SERVER_URL, port: CONSTS.PORT, secure: CONSTS.SSL });
   const osc = new OSC({ discardLateMessages: true, plugin: plugin });
 
   osc.on("open", () => {
