@@ -258,7 +258,7 @@ async function addGyroscope() {
 
   window.addEventListener('deviceorientation', (e) => {
     if (me === null) return;
-    const { alpha, beta, gamma } = e;
+    const { beta, gamma } = e;
 
     const mappedBeta = Math.max(-0.2, Math.min(0.2, beta! / 90));
     const mappedGamma = Math.max(-1.0, Math.min(1.0, gamma! / 90));
