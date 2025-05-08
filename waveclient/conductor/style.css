@@ -16,8 +16,41 @@ body {
 }
 
 #checkboxes {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(4, auto);
+    grid-template-rows: repeat(4, auto);
+    gap: 8px 16px;
     justify-content: center;
     align-items: center;
+}
+
+#checkboxes input[type="checkbox"] {
+    width: 32px;
+    height: 32px;
+    accent-color: #0074d9;
+    cursor: pointer;
+}
+
+#button-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 24px;
+    align-items: center;
+}
+
+#button-stack button {
+    width: calc(4 * 32px + 3 * 16px); /* 4 checkboxes + 3 gaps */
+    height: 32px;
+    font-size: 1rem;
+    cursor: pointer;
+    border-radius: 4px;
+    border: 1px solid #0074d9;
+    background: #f0f8ff;
+    color: #0074d9;
+    transition: background 0.2s;
+}
+
+#button-stack button:hover {
+    background: #e6f2fa;
 }

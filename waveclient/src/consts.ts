@@ -1,27 +1,9 @@
-export const PORT = 8910;
+export const SERVER_URL = "waveserver.leonzong.com";
+export const PORT = 443;
 // define and export constants
 export const HORIZ_SKEW = Math.PI / 6;
 export const VERT_ROTATE = Math.PI / 6;
-
-export const SOUNDFILES = [
-    "tracks/track 1-1 kick.wav",
-    "tracks/track 2-1 snare.wav",
-    "tracks/track 3-1 hat.wav",
-    "tracks/track 4-1 clhat.wav",
-    "tracks/track 5-1 pad.wav",
-    "tracks/track 6-1 vox1.wav",
-    "tracks/track 7-1 vox2.wav",
-    "tracks/track 8-1 vox3.wav",
-    "tracks/track 9-1 vox4.wav",
-    "tracks/track 10-1 vox5.wav",
-    "tracks/track 11-1 arp.wav",
-    "tracks/track 12-1 arpnoise.wav",
-    "tracks/track 13-1 dialup.wav",
-    "tracks/track 14-1 bass.wav",
-    "tracks/track 15-1 vo6.wav",
-    "tracks/track 16 blank.wav"
-];
-  
+ 
 export const COLORS = [
     ["#5A2E2E", "#E57373", "#FFCDD2"],
     ["#5A3E2E", "#E59873", "#FFE0B2"],
@@ -43,42 +25,67 @@ export const COLORS = [
   
 export const DESIGNS = [
     [
-        [0, 0],
-        [3, 3]
+        [0, 3],
+        [0, 3]
     ],
     [
-        [1, 2],
-        [5, 8]
+        [1, 5],
+        [2, 8]
     ],
     [
-        [12, 12],
-        [14, 15]
+        [12, 14],
+        [12, 15]
     ],
     [
-        [17, 18],
-        [21, 21]
+        [17, 21],
+        [18, 21]
     ],
     [
-        [23, 23],
-        [24, 24]
+        [23, 24],
+        [23, 24]
     ],
     [
         [30, 31],
         [36, 37]
     ],
     [
-        [44, 45, 46, 47, 47, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60],
-        [4, 4]
+        [39, 40],
+        [41, 42]
+    ],
+    [ //8
+        [85, 93],
+        [94, 96]
     ],
     [
-        [70, 71],
-        [72, 73]
+        [99, 100],
+        [101, 102]
+    ],
+    [
+        [113, 114],
+        [115, 116]
+    ],
+    [
+        [117, 118],
+        [119, 120]
+    ],
+    [
+        [86, 87],
+        [88, 89]  
+    ],
+    [
+        [121, 122],
+        [123, 124]
+    ], 
+    [ // 14
+        [105, 106],
+        [109, 110]
+    ],
+    [
+        [125, 126],
+        [127, 128]
+    ],
+    [
+        [4, 144, 146, 148, 150, 152, 154, 156, 158, 160],
+        [4, 145, 147, 148, 151, 153, 155, 157, 158, 161]
     ]
 ]
-
-for (let i = 9; i <= 16; i++) {
-    DESIGNS.push([
-        [73 + i, 74 + i],
-        [75 + i, 76 + i]
-    ]);
-}

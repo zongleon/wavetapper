@@ -34,7 +34,7 @@ for (let i = 0; i < 4; i++) {
   for (let j = 0; j < 4; j++) {
     // make textures for this cube
     const leftTexts = createTileTextures(app, tileset, CONSTS.DESIGNS[i * 4 + j][0][0], i * 4 + j);
-    const rightTexts = createTileTextures(app, tileset, CONSTS.DESIGNS[i * 4 + j][0][1], i * 4 + j);
+    const rightTexts = createTileTextures(app, tileset, CONSTS.DESIGNS[i * 4 + j][1][0], i * 4 + j);
     baseTextures.push(leftTexts.bg);
     specTextures.push([leftTexts.composite, rightTexts.composite]);
     topTextures.push(leftTexts.solid);
@@ -59,15 +59,20 @@ for (let i = 0; i < 4; i++) {
 let ck: Chuck;
 (async () => {
   let files = [{serverFilename: "../chuck/tapper.ck", virtualFilename: "tapper.ck"}].concat(
-    CONSTS.SOUNDFILES.map((file) => {
-      return { serverFilename: `../chuck/${file}`, virtualFilename: `/${file}` };
-    })
+    // files are named TRACK 1-1.wav, TRACK 1-2.wav, TRACK 2-1.wav, TRACK 2-2.wav,
+    // for 16 tracks each with 2 options
+    // don't include TRACK 14 or TRACK 16
+    Array.from({ length: 32 }, (_, i) => ({
+      serverFilename: `../chuck/tracks/TRACK ${Math.floor(i / 2) + 1}-${(i % 2) + 1}.wav`,
+      virtualFilename: `tracks/TRACK ${Math.floor(i / 2) + 1}-${(i % 2) + 1}.wav`
+    })).filter((v, _) => v.virtualFilename.indexOf("14-") == -1 &&
+                         v.virtualFilename.indexOf("16-") == -1)
   )
   ck = await Chuck.init(files);
   await ck.runFile("tapper.ck");
   ck.startListeningForEvent("soundEvent", () => {
     ck.getIntArray("poss").then(value => {
-      for (let i = 0; i < value.length; i++) {
+      for (let i = 0; i < value.length - 1; i++) {
         if (value[i] == 1) {
           animateFace(cubeTimeout, cubes[i], i, {
             baseTextures: baseTextures,
@@ -78,7 +83,12 @@ let ck: Chuck;
         }
       }
     })
+  document.getElementById("start-button")!.addEventListener("click", async () => {
+    if (ck.context.state === "suspended") {
+      (ck.context as AudioContext).resume();
+    }
   });
+});
 
   // start connection after Chuck is ready
   initConnection();
@@ -86,7 +96,7 @@ let ck: Chuck;
 
 function initConnection(): OSC {
   // open ws connection
-  const plugin = new OSC.WebsocketClientPlugin({ port: CONSTS.PORT });
+  const plugin = new OSC.WebsocketClientPlugin({ host: CONSTS.SERVER_URL, port: CONSTS.PORT, secure: true  });
   const osc = new OSC({ discardLateMessages: true, plugin: plugin });
 
   osc.on("open", () => {
@@ -104,6 +114,7 @@ function initConnection(): OSC {
 
   osc.on("/enabled", (message: OSC.Message) => {
     let enabled = JSON.parse(message.args[0] as string);
+    console.log(enabled);
     updateSection(enabled);
   });
 
@@ -115,8 +126,34 @@ function initConnection(): OSC {
   osc.on("/setting", (message: OSC.Message) => {
     let player = message.args[0] as number;
     let setting = message.args[1] as number;
+
+    if (player == 15) {
+      const leftTexts = createTileTextures(app, tileset, CONSTS.DESIGNS[15][0][setting], 15);
+      const rightTexts = createTileTextures(app, tileset, CONSTS.DESIGNS[15][1][setting], 15);
+
+      setCubeTextures(cubes[15], [leftTexts.composite, rightTexts.composite, leftTexts.solid]);
+      return;
+    }
     updatePlayer({ id: "", pos: player, setting: setting });
   });
+
+  osc.on("/volume", (message: OSC.Message) => {
+    let player = message.args[0] as number;
+    let volume = message.args[1] as number;
+
+    if (player == 13) {
+      updateReverb(Math.abs(volume) / 10);
+      return;
+    }
+    updatePlayerVolume(player, volume);
+  });
+
+  osc.on("/pan", (message: OSC.Message) => {
+    let player = message.args[0] as number;
+    let pan = message.args[1] as number;
+    updatePlayerPan(player, pan);
+  });
+
 
   osc.open();
 
@@ -147,10 +184,22 @@ function updatePlayer(player: Player) {
   ck.setIntArrayValue("setting_sounds", player.pos, [player.setting]);
 }
 
+function updatePlayerVolume(player: number, volume: number) {
+  ck.setFloatArrayValue("gains_sounds", player, volume);
+}
+
+function updatePlayerPan(player: number, pan: number) {
+  ck.setFloatArrayValue("pans_sounds", player, pan);
+}
+
+function updateReverb(reverb: number) {
+  ck.setFloat("rev14", reverb);
+}
+
 function updateCubeDesign(pos: number, designIndex: number) {
   // Update textures for the current design index
-  const leftTexts = createTileTextures(app, tileset, CONSTS.DESIGNS[pos][designIndex][0], pos);
-  const rightTexts = createTileTextures(app, tileset, CONSTS.DESIGNS[pos][designIndex][1], pos);
+  const leftTexts = createTileTextures(app, tileset, CONSTS.DESIGNS[pos][0][designIndex], pos);
+  const rightTexts = createTileTextures(app, tileset, CONSTS.DESIGNS[pos][1][designIndex], pos);
 
   specTextures[pos][0] = leftTexts.composite;
   specTextures[pos][1] = rightTexts.composite;

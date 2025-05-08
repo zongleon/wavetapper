@@ -8,7 +8,8 @@
 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] @=> global float pans_sounds[];
  
- 0 => global float rev14;
+0 => global float rev14;
+0 => int enable14;
 
 // sound play event (for animation, etc)
 [0, 0, 0, 0, 0, 0, 0, 0,
@@ -18,43 +19,30 @@ global Event soundEvent;
 global Event loopEvent;
 
 // Define the sound sources
-[
-    "tracks/track 1-1 kick.wav",
-    "tracks/track 2-1 snare.wav",
-    "tracks/track 3-1 hat.wav",
-    "tracks/track 4-1 clhat.wav",
-    "tracks/track 5-1 pad.wav",
-    "tracks/track 7-1 vox2.wav",
-    "tracks/track 8-1 vox3.wav",
-    "tracks/track 9-1 vox4.wav",
-    "tracks/track 10-1 vox5.wav",
-    "tracks/track 11-1 arp.wav",
-    "tracks/track 12-1 arpnoise.wav",
-    "tracks/track 13-1 dialup.wav",
-    "tracks/track 14-1 bass.wav",
-    "tracks/track 16 blank.wav", // track 14, reverb guy
-    "tracks/track 15-1 vo6.wav",
-    "tracks/track 16 blank.wav"
-] @=> string files[];
-
 SndBuf sounds[16];
 Gain gains[16];
 Pan2 pans[16];
-JCRev rev;
-
-rev => dac;
+JCRev revs[16];
+Chorus choruses[16];
 
 0.5 => float baseGain;
 
 for (0 => int i; i < 16; i++) {
-    SndBuf sound => Gain gain => Pan2 pan => rev;
+    if (i == 13 || i == 15) {
+        continue;
+    }
+    SndBuf sound => Gain gain => JCRev rev => Chorus ch => Pan2 pan => dac;
 
-    me.dir() + files[i] => sound.read;
+    0 => ch.mix;
+    rev14 => rev.mix;
+
+    me.dir() + "tracks/TRACK " + (i + 1) + "-" + (setting_sounds[i] + 1) + ".wav" => sound.read;
     sound.samples() => sound.pos;
     sound @=> sounds[i];
-    rev14 => rev.mix;
     gain @=> gains[i];
+    rev @=> revs[i];
     pan @=> pans[i];
+    ch @=> choruses[i];
 }
 
 // rhythm
@@ -63,10 +51,10 @@ sounds[0].length() => dur patternLength;
 patternLength / 128 => dur triggerTime;
 
 // transient detection
-0.005 => float threshold;
-fun void transientDetector(SndBuf buf, int i)
+0.003 => float threshold;
+fun float transientDetector(SndBuf buf, int i, float lastSamp)
 {
-    float currentSamp, lastSamp, difference;
+    float currentSamp, difference;
     buf.last() => currentSamp;
     Math.fabs(currentSamp - lastSamp) => difference; // simpler since only one check per tick
 
@@ -76,7 +64,7 @@ fun void transientDetector(SndBuf buf, int i)
         1 => poss[i];
         soundEvent.broadcast();
     }
-    lastSamp => currentSamp;
+    return currentSamp;
 }
 
 
@@ -84,9 +72,10 @@ fun void transientDetector(SndBuf buf, int i)
 fun void rhythm(int p) {
     0 => sounds[p].pos;
     now => time start;
+    float lastSamp;
     while (now < start + patternLength) {
         // detect transient
-        transientDetector(sounds[p], p);
+        transientDetector(sounds[p], p, lastSamp) => lastSamp;
         triggerTime => now;
         0 => poss[p];
     }
@@ -98,7 +87,20 @@ fun void effecter(int p) {
         // update gain
         gains_sounds[p] + baseGain => gains[p].gain;
         pans_sounds[p] => pans[p].pan;
-        patternLength => now;
+
+        if (enable14) {
+            rev14 => revs[p].mix;
+            if (setting_sounds[13] == 1) {
+                rev14 * 10 => choruses[p].mix;
+            } else {
+                0 => choruses[p].mix;
+            }
+        } else {
+            0 => revs[p].mix;
+            0 => choruses[p].mix;
+        }
+
+        triggerTime => now;
     }
 }
 
@@ -106,13 +108,12 @@ fun void effecter(int p) {
 fun void reverber() {
     now => time start;
     while (now < start + patternLength) {
-        rev14 => rev.mix;
-        1 => poss[14];
+        // rev14 => rev.mix;
+        1 => poss[13];
         soundEvent.broadcast();
         triggerTime => now;
     }
-    0 => poss[14];
-    0 => rev.mix;
+    0 => poss[13];
 }
 
 fun void eventer() {
@@ -124,17 +125,29 @@ fun void eventer() {
 }
 //spork ~ eventer();
 
+fun void reloadSound(int p) {
+    me.dir() + "tracks/TRACK " + (p + 1) + "-" + (setting_sounds[p] + 1) + ".wav" => sounds[p].read;
+    sounds[p].samples() => sounds[p].pos;
+}
+
 for (0 => int i; i < 16; i++) {
     spork ~ effecter(i);
 }
 
 while (true) {
+    0 => enable14;
     for (0 => int i; i < enabled_sounds.size(); i++) {
         if (enabled_sounds[i] == 1) {
             if (i == 13) {
                 spork ~ reverber();
+                1 => enable14;
                 continue;
             }
+            if (i == 15) {
+                continue;
+            }
+            // <<< gains[i].gain(), pans[i].pan() >>>;
+            reloadSound(i);
             spork ~ rhythm(i);
         }
     }

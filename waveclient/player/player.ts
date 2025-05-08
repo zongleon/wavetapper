@@ -1,4 +1,4 @@
-import { Application, Texture, Container, Sprite, Assets } from "pixi.js";
+import { Application, Texture, Container, Assets } from "pixi.js";
 import OSC from "osc-js";
 import { createCube, animateJump, createTileTextures, setCubeTextures } from "../src/utils";
 import * as CONSTS from "../src/consts";
@@ -8,7 +8,6 @@ type Player = {
   pos: number;
   setting: number;
 };
-
 
 /*
   1. show modal to let a player pick a name
@@ -27,7 +26,10 @@ header.style.display = "none";
 
 let playerName = "";
 
-nameButton.addEventListener("click", () => {
+nameButton.addEventListener("click", async () => {
+  // start connection
+  await addGyroscope();
+
   playerName = nameInput.value.trim();
   if (playerName) {
     // Update the span with the player's name
@@ -36,6 +38,7 @@ nameButton.addEventListener("click", () => {
     // Hide the modal
     namePickerModal.style.display = "none";
     header.style.display = "block";
+    
   } else {
     nameInput.placeholder = "enter a name...";
   }
@@ -84,28 +87,35 @@ function createArrowButtons() {
 
   leftArrow.onclick = () => switchDesign(-1);
   rightArrow.onclick = () => switchDesign(1);
-}
 
-function removeArrowButtons() {
-  if (leftArrow) leftArrow.remove();
-  if (rightArrow) rightArrow.remove();
-  leftArrow = null;
-  rightArrow = null;
+  if (me === 15) {
+    const selectButton = document.createElement("button");
+    selectButton.innerText = "Select";
+    selectButton.className = "select-button";
+    document.body.appendChild(selectButton);
+
+    selectButton.onclick = () => {
+      osc.send(new OSC.Message("/player/setting", me, myDesignIndex));
+    };
+  }
 }
 
 function switchDesign(dir: number) {
   if (me === null) return;
-  const designs = CONSTS.DESIGNS[me];
+  const designs = CONSTS.DESIGNS[me][0];
   myDesignIndex = (myDesignIndex + dir + designs.length) % designs.length;
-  osc.send(new OSC.Message("/player/setting", me, myDesignIndex));
+
+  if (me != 15) {
+    osc.send(new OSC.Message("/player/setting", me, myDesignIndex));
+  }
   updateMyCubeDesign();
 }
 
 function updateMyCubeDesign() {
   if (me === null) return;
   // Update textures for the current design index
-  const leftTexts = createTileTextures(app, tileset, CONSTS.DESIGNS[me][myDesignIndex][0], me);
-  const rightTexts = createTileTextures(app, tileset, CONSTS.DESIGNS[me][myDesignIndex][1], me);
+  const leftTexts = createTileTextures(app, tileset, CONSTS.DESIGNS[me][0][myDesignIndex], me);
+  const rightTexts = createTileTextures(app, tileset, CONSTS.DESIGNS[me][1][myDesignIndex], me);
 
   // Update the cube's textures visually
   const cube = cubes[me];
@@ -135,12 +145,11 @@ for (let i = 0; i < 4; i++) {
   }
 }
 
-// start connection
 const osc = initConnection();
 
 function initConnection(): OSC {
   // open ws connection
-  const plugin = new OSC.WebsocketClientPlugin({ port: CONSTS.PORT });
+  const plugin = new OSC.WebsocketClientPlugin({ host: CONSTS.SERVER_URL, port: CONSTS.PORT, secure: true });
   const osc = new OSC({ discardLateMessages: true, plugin: plugin });
 
   osc.on("open", () => {
@@ -242,5 +251,20 @@ function addListeners(cube: Container) {
   });
 }
 
-// Optionally, remove arrows on window unload
-window.addEventListener("beforeunload", removeArrowButtons);
+async function addGyroscope() {
+  if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
+    await (DeviceOrientationEvent as any).requestPermission();
+  }
+
+  window.addEventListener('deviceorientation', (e) => {
+    if (me === null) return;
+    const { alpha, beta, gamma } = e;
+
+    const mappedBeta = Math.max(-0.2, Math.min(0.2, beta! / 90));
+    const mappedGamma = Math.max(-1.0, Math.min(1.0, gamma! / 90));
+
+    osc.send(new OSC.Message("/player/volume", me, mappedBeta));
+    osc.send(new OSC.Message("/player/pan", me, mappedGamma));
+  }, false);
+
+}
