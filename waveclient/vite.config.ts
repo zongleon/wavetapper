@@ -14,6 +14,7 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         viewer: resolve(__dirname, 'viewer/index.html'),
         player: resolve(__dirname, 'player/index.html'),
+        conductor: resolve(__dirname, 'conductor/index.html'),
       },
     },
   },
