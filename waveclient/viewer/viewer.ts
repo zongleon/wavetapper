@@ -58,12 +58,12 @@ for (let i = 0; i < 4; i++) {
 // Load and run Chuck asynchronously
 let ck: Chuck;
 (async () => {
-  let files = [{serverFilename: "../chuck/tapper.ck", virtualFilename: "tapper.ck"}].concat(
+  let files = [{serverFilename: "/chuck/tapper.ck", virtualFilename: "tapper.ck"}].concat(
     // files are named TRACK 1-1.wav, TRACK 1-2.wav, TRACK 2-1.wav, TRACK 2-2.wav,
     // for 16 tracks each with 2 options
     // don't include TRACK 14 or TRACK 16
     Array.from({ length: 32 }, (_, i) => ({
-      serverFilename: `../chuck/tracks/TRACK ${Math.floor(i / 2) + 1}-${(i % 2) + 1}.wav`,
+      serverFilename: `/chuck/tracks/TRACK ${Math.floor(i / 2) + 1}-${(i % 2) + 1}.wav`,
       virtualFilename: `tracks/TRACK ${Math.floor(i / 2) + 1}-${(i % 2) + 1}.wav`
     })).filter((v, _) => v.virtualFilename.indexOf("14-") == -1 &&
                          v.virtualFilename.indexOf("16-") == -1)
