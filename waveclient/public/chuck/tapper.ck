@@ -1,22 +1,41 @@
-// Global variables
+// ------------------------------------
+// LEON ZONG FINAL PROJECT (wavetapper)
+// ------------------------------------
+
+// ---------------------------------------------
+// global variables (aka, managed in Javascript)
+// ---------------------------------------------
+
+// binary array of sounds that should be played
 [0, 0, 0, 0, 0, 0, 0, 0,
  0, 0, 0, 0, 0, 0, 0, 0] @=> global int enabled_sounds[];
+
+// player selections
 [0, 0, 0, 0, 0, 0, 0, 0,
  0, 0, 0, 0, 0, 0, 0, 0] @=> global int setting_sounds[];
+
+// player gain (deviation from baseGain)
 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] @=> global float gains_sounds[];
+
+// player pan
 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] @=> global float pans_sounds[];
- 
+
+// player 14 gets special controls for their reverb effect
 0 => global float rev14;
 0 => int enable14;
 
-// sound play event (for animation, etc)
+// sound play event (for animation, etc) (listened for in JS)
 [0, 0, 0, 0, 0, 0, 0, 0,
  0, 0, 0, 0, 0, 0, 0, 0] @=> global int poss[];
 
 global Event soundEvent;
 global Event loopEvent;
+
+// ---------------------------------------------
+// sounmd setup
+// ---------------------------------------------
 
 // Define the sound sources
 SndBuf sounds[16];
@@ -29,13 +48,18 @@ Chorus choruses[16];
 
 for (0 => int i; i < 16; i++) {
     if (i == 13 || i == 15) {
+        // player 14 (13) is reverb
+        // player 16 (15) is just visual
         continue;
     }
+    // signal chain (it's a lot, i know)
     SndBuf sound => Gain gain => JCRev rev => Chorus ch => Pan2 pan => dac;
 
+    // mute reverb and chorus
     0 => ch.mix;
     rev14 => rev.mix;
 
+    // load an initial sound file
     me.dir() + "tracks/TRACK " + (i + 1) + "-" + (setting_sounds[i] + 1) + ".wav" => sound.read;
     sound.samples() => sound.pos;
     sound @=> sounds[i];
@@ -45,9 +69,12 @@ for (0 => int i; i < 16; i++) {
     ch @=> choruses[i];
 }
 
-// rhythm
+// ---------------------------------------------
+// utility functions for playing and processing sounds
+// ---------------------------------------------
+
+// rhythms
 sounds[0].length() => dur patternLength;
-// patternLength / 32 - 24::ms => dur triggerTime;
 patternLength / 128 => dur triggerTime;
 
 // transient detection
@@ -56,11 +83,13 @@ fun float transientDetector(SndBuf buf, int i, float lastSamp)
 {
     float currentSamp, difference;
     buf.last() => currentSamp;
-    Math.fabs(currentSamp - lastSamp) => difference; // simpler since only one check per tick
+    Math.fabs(currentSamp - lastSamp) => difference;
 
-    // <<< difference >>>;
+    // <<< difference >>>; // check the difference between adjacent samples
     if (difference > threshold)
     {
+        // set element i to be triggered,
+        // and broadcast the event to JS
         1 => poss[i];
         soundEvent.broadcast();
     }
@@ -70,8 +99,11 @@ fun float transientDetector(SndBuf buf, int i, float lastSamp)
 
 // Function to play a pattern
 fun void rhythm(int p) {
+    // play pattern p!
     0 => sounds[p].pos;
     now => time start;
+
+    // and keep track, for the transient detector
     float lastSamp;
     while (now < start + patternLength) {
         // detect transient
@@ -82,12 +114,14 @@ fun void rhythm(int p) {
     0 => poss[p];
 }
 
+// function (for each rhythm) to update gain and pan
 fun void effecter(int p) {
     while (true) {
         // update gain
         gains_sounds[p] + baseGain => gains[p].gain;
         pans_sounds[p] => pans[p].pan;
 
+        // only set reverb effects if enabled
         if (enable14) {
             rev14 => revs[p].mix;
             if (setting_sounds[13] == 1) {
@@ -105,6 +139,8 @@ fun void effecter(int p) {
 }
 
 // Function to play a pattern
+// Since the reverb audio file doesn't exist,
+// i needed to trigger a set pattern (for this, all the time)
 fun void reverber() {
     now => time start;
     while (now < start + patternLength) {
@@ -116,6 +152,7 @@ fun void reverber() {
     0 => poss[13];
 }
 
+// purely for debugging
 fun void eventer() {
     while (true) {
         soundEvent => now;
@@ -125,10 +162,16 @@ fun void eventer() {
 }
 //spork ~ eventer();
 
+// for when players switch their setting. re-read it!
 fun void reloadSound(int p) {
     me.dir() + "tracks/TRACK " + (p + 1) + "-" + (setting_sounds[p] + 1) + ".wav" => sounds[p].read;
     sounds[p].samples() => sounds[p].pos;
 }
+
+// ---------------------------------------------
+// main loop! run and play the sounds that come in
+// ---------------------------------------------
+
 
 for (0 => int i; i < 16; i++) {
     spork ~ effecter(i);
@@ -139,6 +182,7 @@ while (true) {
     for (0 => int i; i < enabled_sounds.size(); i++) {
         if (enabled_sounds[i] == 1) {
             if (i == 13) {
+                // 14 is enabled! time to reverb
                 spork ~ reverber();
                 1 => enable14;
                 continue;
@@ -146,12 +190,14 @@ while (true) {
             if (i == 15) {
                 continue;
             }
-            // <<< gains[i].gain(), pans[i].pan() >>>;
+            // reload the sound and play it
             reloadSound(i);
             spork ~ rhythm(i);
         }
     }
-    // me.yield();
+    // i was doing something with this event but no longer
     loopEvent.signal();
+
+    // IMPORTANT: update everything only once per patternLength
     patternLength => now;
 }

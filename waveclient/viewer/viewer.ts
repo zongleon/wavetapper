@@ -21,7 +21,7 @@ const baseTexture = await Assets.load("/assets/0.jpg");
 const tileset = await Assets.load("/assets/tilesetwhite.png");
 tileset.source.scaleMode = "nearest";
 
-// make a grid of 16 cubes
+// store textures and informations about the cubes
 let cubes: Container[] = [];
 let baseTextures: Texture[] = [];
 let specTextures: Texture[][] = [];
@@ -29,7 +29,7 @@ let topTextures: Texture[] = [];
 let cubeTimeout: NodeJS.Timeout[] = [];
 let cubeHeights: number[] = [];
 
-// add cubes!
+// make a grid of 16 cubes!
 for (let i = 0; i < 4; i++) {
   for (let j = 0; j < 4; j++) {
     // make textures for this cube
@@ -58,6 +58,7 @@ for (let i = 0; i < 4; i++) {
 // Load and run Chuck asynchronously
 let ck: Chuck;
 (async () => {
+  // first we have to tell Chuck which files to load
   let files = [{serverFilename: "/chuck/tapper.ck", virtualFilename: "tapper.ck"}].concat(
     // files are named TRACK 1-1.wav, TRACK 1-2.wav, TRACK 2-1.wav, TRACK 2-2.wav,
     // for 16 tracks each with 2 options
@@ -69,7 +70,11 @@ let ck: Chuck;
                          v.virtualFilename.indexOf("16-") == -1)
   )
   ck = await Chuck.init(files);
+
+  // then run the main chuck file
   await ck.runFile("tapper.ck");
+
+  // and process soundEvents (transients), which tell us to animate
   ck.startListeningForEvent("soundEvent", () => {
     ck.getIntArray("poss").then(value => {
       for (let i = 0; i < value.length - 1; i++) {
@@ -83,6 +88,8 @@ let ck: Chuck;
         }
       }
     })
+  
+  // also we add a button to resume the audio context
   document.getElementById("start-button")!.addEventListener("click", async () => {
     if (ck.context.state === "suspended") {
       (ck.context as AudioContext).resume();
@@ -99,10 +106,15 @@ function initConnection(): OSC {
   const plugin = new OSC.WebsocketClientPlugin({ host: CONSTS.SERVER_URL, port: CONSTS.PORT, secure: CONSTS.SSL });
   const osc = new OSC({ discardLateMessages: true, plugin: plugin });
 
+  // try to view! to get an initial list of players (state)
   osc.on("open", () => {
     osc.send(new OSC.Message("/viewing", 1));
   });
 
+  // THE FOLLOWING MESSAGES
+  // upate various chuck parameters
+  // or the designs of the cubes
+  // I won't comment each one
   osc.on("/players", (message: OSC.Message) => {
     let players: Player[] = JSON.parse(message.args[0] as string);
     players.forEach(player => {
@@ -159,6 +171,10 @@ function initConnection(): OSC {
 
   return osc;
 }
+
+// Helper functions to update the chuck variables
+// called from the OSC message handlers above
+// Some functions also change the cube textures
 
 function updateSection(enabled: number[]) {
   const arrEnabled = new Array(16).fill(0);
